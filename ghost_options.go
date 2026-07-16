@@ -57,6 +57,42 @@ type GhostOptions struct {
 	// TextDrift selects how the letterforms wander from frame to frame.
 	// Default: TextDriftRandom.
 	TextDrift TextDrift
+
+	// Format selects the output container/codec. Default: FormatWebM.
+	Format Format
+}
+
+// Format selects GenerateGhost's output container/codec.
+type Format int
+
+const (
+	// FormatWebM encodes VP8 video in a WebM container using ffmpeg's
+	// libvpx encoder at its realtime/fastest settings. This is the
+	// default: since ghost-captcha images are generated per-request
+	// rather than authored once, encode speed matters more than the
+	// extra compression VP9 or AV1 would buy at a much higher CPU cost.
+	// Requires ffmpeg on PATH.
+	FormatWebM Format = iota
+	// FormatGIF encodes a paletted, looping animated GIF using only the
+	// Go standard library — no ffmpeg dependency, but a much larger file
+	// for the same animation than either video format.
+	FormatGIF
+	// FormatMP4 encodes H.264 video (libx264, "ultrafast" preset) in an
+	// MP4 container, for players/browsers that don't support WebM.
+	// Requires ffmpeg on PATH.
+	FormatMP4
+)
+
+// String returns the format's lowercase name, e.g. for error messages.
+func (f Format) String() string {
+	switch f {
+	case FormatGIF:
+		return "gif"
+	case FormatMP4:
+		return "mp4"
+	default:
+		return "webm"
+	}
 }
 
 // TextDrift selects the shape of the path the letterforms wander along

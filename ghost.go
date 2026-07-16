@@ -7,6 +7,9 @@ import (
 	"image"
 	"image/color"
 	"image/gif"
+	"os/exec"
+	"runtime"
+	"sync"
 
 	"golang.org/x/image/font"
 )
@@ -22,13 +25,23 @@ import (
 //
 // The animation is exactly one seamless loop: the last frame flows straight
 // back into the first with no jump. opts.Format selects the output file
-// format; the video formats need ffmpeg installed and on PATH.
+// format; the video formats (FormatWebM, FormatMP4) need ffmpeg installed
+// and on PATH.
 func GenerateGhost(text string, opts *GhostOptions) ([]byte, error) {
 	if text == "" {
 		return nil, errors.New("ghostfont: text must not be empty")
 	}
 	text = lineEndingReplacer.Replace(text)
 	opts.setDefaults()
+
+	// Check ffmpeg is available before spending time rendering frames,
+	// so a missing dependency fails fast with a clear error instead of
+	// surfacing deep inside encodeVideo after all that work.
+	if opts.Format != FormatGIF {
+		if _, err := exec.LookPath("ffmpeg"); err != nil {
+			return nil, fmt.Errorf("ghostfont: %s output requires ffmpeg on PATH: %w", opts.Format, err)
+		}
+	}
 
 	face, err := loadFace(opts.FontBytes, opts.FontSize)
 	if err != nil {
@@ -38,12 +51,21 @@ func GenerateGhost(text string, opts *GhostOptions) ([]byte, error) {
 
 	frames, delays := renderGhostFrames(face, text, opts)
 
-	g := &gif.GIF{Image: frames, Delay: delays, LoopCount: opts.Loop}
-	var buf bytes.Buffer
-	if err := gif.EncodeAll(&buf, g); err != nil {
-		return nil, fmt.Errorf("ghostfont: encoding gif: %w", err)
+	if opts.Format == FormatGIF {
+		g := &gif.GIF{Image: frames, Delay: delays, LoopCount: opts.Loop}
+		var buf bytes.Buffer
+		if err := gif.EncodeAll(&buf, g); err != nil {
+			return nil, fmt.Errorf("ghostfont: encoding gif: %w", err)
+		}
+		return buf.Bytes(), nil
 	}
-	return buf.Bytes(), nil
+
+	fps := fmt.Sprintf("100/%d", opts.FrameDelay)
+	data, err := encodeVideo(frames, opts.Width, opts.Height, fps, opts.Format)
+	if err != nil {
+		return nil, fmt.Errorf("ghostfont: encoding video: %w", err)
+	}
+	return data, nil
 }
 
 func renderGhostFrames(face font.Face, text string, opts *GhostOptions) ([]*image.Paletted, []int) {
@@ -64,10 +86,24 @@ func renderGhostFrames(face font.Face, text string, opts *GhostOptions) ([]*imag
 
 	frames := make([]*image.Paletted, frameCount)
 	delays := make([]int, frameCount)
+
+	// Frames are independent given the shared, read-only shape/tiles/
+	// anchors computed above, so render them concurrently: each goroutine
+	// only ever writes its own frames[i], and the worker count is capped
+	// at GOMAXPROCS so this doesn't oversubscribe the CPU.
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, runtime.GOMAXPROCS(0))
 	for i := range frames {
-		frames[i] = renderGhostFrame(shape, anchors[i], bgTile, textTile, palette, opts, i, bgDir, textDir)
 		delays[i] = opts.FrameDelay
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			frames[i] = renderGhostFrame(shape, anchors[i], bgTile, textTile, palette, opts, i, bgDir, textDir)
+		}(i)
 	}
+	wg.Wait()
 	return frames, delays
 }
 
