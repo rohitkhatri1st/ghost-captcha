@@ -76,6 +76,54 @@ func TestTextShapeMinimumWidth(t *testing.T) {
 	}
 }
 
+func TestTextShapeMultiLineHeight(t *testing.T) {
+	face := testFace(t)
+
+	oneLine := textShape(face, "A", 0)
+	threeLines := textShape(face, "A\nB\nC", 0)
+
+	if threeLines.Rect.Dy() != oneLine.Rect.Dy()*3 {
+		t.Errorf("3-line height = %d, want %d (3x one line's %d)",
+			threeLines.Rect.Dy(), oneLine.Rect.Dy()*3, oneLine.Rect.Dy())
+	}
+}
+
+func TestTextShapeMultiLineWidthIsWidestLine(t *testing.T) {
+	face := testFace(t)
+
+	// The second line ("AB") is shorter than the first ("ABCD"); overall
+	// width must be the widest line, not a sum or an average of lines.
+	multiLine := textShape(face, "ABCD\nAB", 0)
+	wantWidth := textShape(face, "ABCD", 0)
+
+	if multiLine.Rect.Dx() != wantWidth.Rect.Dx() {
+		t.Errorf("multi-line width = %d, want %d (width of the longest line)",
+			multiLine.Rect.Dx(), wantWidth.Rect.Dx())
+	}
+}
+
+func TestTextShapeMultiLineDrawsEveryLine(t *testing.T) {
+	face := testFace(t)
+	shape := textShape(face, "A\nB", 0)
+
+	lineHeight := shape.Rect.Dy() / 2
+	topHalf := image.NewAlpha(image.Rect(0, 0, shape.Rect.Dx(), lineHeight))
+	bottomHalf := image.NewAlpha(image.Rect(0, 0, shape.Rect.Dx(), lineHeight))
+	for y := 0; y < lineHeight; y++ {
+		for x := 0; x < shape.Rect.Dx(); x++ {
+			topHalf.SetAlpha(x, y, shape.AlphaAt(x, y))
+			bottomHalf.SetAlpha(x, y, shape.AlphaAt(x, y+lineHeight))
+		}
+	}
+
+	if !maskHasInk(topHalf) {
+		t.Error("first line ('A') drew no ink in the mask's top half")
+	}
+	if !maskHasInk(bottomHalf) {
+		t.Error("second line ('B') drew no ink in the mask's bottom half")
+	}
+}
+
 func TestIsTextPixel(t *testing.T) {
 	mask := image.NewAlpha(image.Rect(0, 0, 4, 4))
 	mask.SetAlpha(1, 2, color.Alpha{A: 255})

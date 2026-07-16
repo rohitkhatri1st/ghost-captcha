@@ -4,6 +4,7 @@ import (
 	"image"
 	"math"
 	"math/rand/v2"
+	"strings"
 
 	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
@@ -15,32 +16,46 @@ import (
 // per-frame anchor (see textFrameAnchors) rather than re-rasterizing text
 // for every frame.
 //
+// text may contain "\n" to break it into multiple lines (lineEndingReplacer
+// normalizes CRLF/CR to "\n" upstream, before text reaches here): each line
+// is measured and drawn independently, stacked top to bottom, so the mask
+// grows taller with more lines. The mask's width is its widest line, so it
+// grows wider with longer lines rather than with the text's total length.
+//
 // letterSpacing adds that many extra pixels between each pair of adjacent
-// characters, on top of the font's own advance width; characters are drawn
-// one at a time so that extra gap can be inserted between them.
+// characters on a line, on top of the font's own advance width; characters
+// are drawn one at a time so that extra gap can be inserted between them.
 func textShape(face font.Face, text string, letterSpacing int) *image.Alpha {
 	metrics := face.Metrics()
-	height := (metrics.Ascent + metrics.Descent).Ceil()
+	lineHeight := (metrics.Ascent + metrics.Descent).Ceil()
+	lines := strings.Split(text, "\n")
 
-	runes := []rune(text)
-	width := font.MeasureString(face, text).Ceil()
-	if len(runes) > 1 {
-		width += letterSpacing * (len(runes) - 1)
+	width := 0
+	for _, line := range lines {
+		lineWidth := font.MeasureString(face, line).Ceil()
+		if runes := []rune(line); len(runes) > 1 {
+			lineWidth += letterSpacing * (len(runes) - 1)
+		}
+		width = max(width, lineWidth)
 	}
 	width = max(width, 1)
+	height := max(lineHeight*len(lines), 1)
 
 	mask := image.NewAlpha(image.Rect(0, 0, width, height))
 	d := &font.Drawer{
 		Dst:  mask,
 		Src:  image.Opaque,
 		Face: face,
-		Dot:  fixed.Point26_6{X: 0, Y: metrics.Ascent},
 	}
 	spacing := fixed.I(letterSpacing)
-	for i, r := range runes {
-		d.DrawString(string(r))
-		if i < len(runes)-1 {
-			d.Dot.X += spacing
+	for lineIdx, line := range lines {
+		d.Dot = fixed.Point26_6{X: 0, Y: metrics.Ascent + fixed.I(lineIdx*lineHeight)}
+		runes := []rune(line)
+		for i, r := range runes {
+			d.DrawString(string(r))
+			if i < len(runes)-1 {
+				d.Dot.X += spacing
+			}
 		}
 	}
 	return mask

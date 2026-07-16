@@ -64,11 +64,50 @@ func TestGenerateGhostFramesAppliesDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateGhostFrames with zero-value options: %v", err)
 	}
-	if opts.Width != defaultWidth || opts.Height != defaultHeight {
+	if opts.Width <= 0 || opts.Height <= 0 {
 		t.Errorf("defaults not applied: Width=%d Height=%d", opts.Width, opts.Height)
 	}
 	if len(frames) != 3 {
 		t.Fatalf("len(frames) = %d, want 3", len(frames))
+	}
+}
+
+func TestGenerateGhostFramesWidthGrowsWithTextLength(t *testing.T) {
+	shortOpts := &GhostOptions{FontSize: 24, Frames: 1}
+	if _, _, err := GenerateGhostFrames("A", shortOpts); err != nil {
+		t.Fatalf("GenerateGhostFrames(\"A\"): %v", err)
+	}
+
+	longOpts := &GhostOptions{FontSize: 24, Frames: 1}
+	if _, _, err := GenerateGhostFrames("ABCDEFGHIJKLMNOP", longOpts); err != nil {
+		t.Fatalf("GenerateGhostFrames(long text): %v", err)
+	}
+
+	if longOpts.Width <= shortOpts.Width {
+		t.Errorf("longer text should default to a wider canvas: short.Width=%d, long.Width=%d",
+			shortOpts.Width, longOpts.Width)
+	}
+	// Height must not be affected by line length, only by line count.
+	if longOpts.Height != shortOpts.Height {
+		t.Errorf("single-line text of any length should default to the same height: short.Height=%d, long.Height=%d",
+			shortOpts.Height, longOpts.Height)
+	}
+}
+
+func TestGenerateGhostFramesHeightGrowsWithLineCount(t *testing.T) {
+	oneLine := &GhostOptions{FontSize: 24, Frames: 1}
+	if _, _, err := GenerateGhostFrames("A", oneLine); err != nil {
+		t.Fatalf("GenerateGhostFrames(\"A\"): %v", err)
+	}
+
+	threeLines := &GhostOptions{FontSize: 24, Frames: 1}
+	if _, _, err := GenerateGhostFrames("A\nB\nC", threeLines); err != nil {
+		t.Fatalf("GenerateGhostFrames(\"A\\nB\\nC\"): %v", err)
+	}
+
+	if threeLines.Height <= oneLine.Height {
+		t.Errorf("more lines should default to a taller canvas: oneLine.Height=%d, threeLines.Height=%d",
+			oneLine.Height, threeLines.Height)
 	}
 }
 

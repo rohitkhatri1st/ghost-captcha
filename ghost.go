@@ -10,8 +10,6 @@ import (
 	"os/exec"
 	"runtime"
 	"sync"
-
-	"golang.org/x/image/font"
 )
 
 // FrameEncoder turns rendered ghost frames into final output bytes. opts is
@@ -90,7 +88,10 @@ func GenerateGhostFrames(text string, opts *GhostOptions) (frames []*image.Palet
 	}
 	defer face.Close()
 
-	frames, delays = renderGhostFrames(face, text, opts)
+	shape := textShape(face, text, opts.LetterSpacing)
+	opts.setCanvasDefaults(shape.Rect.Dx(), shape.Rect.Dy())
+
+	frames, delays = renderGhostFrames(shape, opts)
 	return frames, delays, nil
 }
 
@@ -122,7 +123,7 @@ func encodeVideoFrames(frames []*image.Paletted, delays []int, opts *GhostOption
 	return encodeVideo(frames, opts.Width, opts.Height, fps, opts.Format)
 }
 
-func renderGhostFrames(face font.Face, text string, opts *GhostOptions) ([]*image.Paletted, []int) {
+func renderGhostFrames(shape *image.Alpha, opts *GhostOptions) ([]*image.Paletted, []int) {
 	bgDir := scrollDown
 	textDir := opposite(bgDir)
 	frameCount := backgroundFrameCount(opts, bgDir)
@@ -135,7 +136,6 @@ func renderGhostFrames(face font.Face, text string, opts *GhostOptions) ([]*imag
 	textCols, textRows := cellGrid(opts.Width, opts.Height, opts.TextCellSize)
 	textTile := newNoiseTile(textCols, textRows, len(palette))
 
-	shape := textShape(face, text, opts.LetterSpacing)
 	anchors := textFrameAnchors(opts.Width, opts.Height, shape.Rect.Dx(), shape.Rect.Dy(), frameCount, opts.TextDrift)
 
 	frames := make([]*image.Paletted, frameCount)

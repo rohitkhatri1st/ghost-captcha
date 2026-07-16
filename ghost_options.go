@@ -5,15 +5,20 @@ import (
 	"math"
 )
 
-// defaultFontSize is FontSize's zero-value default. defaultWidth and
-// defaultHeight are Width/Height's defaults at defaultFontSize; any other
-// FontSize scales Width and Height proportionally from these, so a bigger
-// font gets a roomier canvas instead of being clipped by a fixed size
-// tuned only for defaultFontSize.
+// defaultFontSize is FontSize's zero-value default.
+const defaultFontSize = 70
+
+// canvasMarginXFactor and canvasMarginYFactor size the default canvas's
+// margin beyond the rendered text's own footprint, as a multiple of
+// FontSize: enough room for TextDrift's wandering (see textFrameAnchors)
+// without the letterforms bumping the canvas edge, regardless of how long
+// the text is or how many lines it spans. Width gets more margin than
+// Height because TextDrift's default (TextDriftRandom) can pick a purely
+// horizontal path, which needs full side-to-side room to read as motion
+// rather than a twitch.
 const (
-	defaultFontSize = 70
-	defaultWidth    = 400
-	defaultHeight   = 100
+	canvasMarginXFactor = 2.0
+	canvasMarginYFactor = 0.6
 )
 
 // GhostOptions controls GenerateGhost's noise animation: the text is drawn
@@ -35,10 +40,13 @@ type GhostOptions struct {
 	// natural spacing.
 	LetterSpacing int
 
-	// Width and Height are the pixel dimensions of the output file.
-	// Defaults: 400x100 at the default FontSize, scaled proportionally to
-	// FontSize otherwise — e.g. doubling FontSize doubles the default
-	// canvas size too, so it doesn't clip a bigger font.
+	// Width and Height are the pixel dimensions of the output file. Left
+	// unset, both default to fit the rendered text itself, plus a margin
+	// (proportional to FontSize) for TextDrift's wandering room: longer
+	// text (or a longer line within multi-line text) defaults to a wider
+	// canvas, and text with more "\n"-separated lines defaults to a
+	// taller one. Set a field explicitly to take full control of it — an
+	// explicit Width or Height never grows or shrinks to fit the text.
 	Width  int
 	Height int
 
@@ -154,12 +162,6 @@ func (o *GhostOptions) setDefaults() {
 	if o.FontSize <= 0 {
 		o.FontSize = defaultFontSize
 	}
-	if o.Width <= 0 {
-		o.Width = int(math.Round((o.FontSize / defaultFontSize) * defaultWidth))
-	}
-	if o.Height <= 0 {
-		o.Height = int(math.Round((o.FontSize / defaultFontSize) * defaultHeight))
-	}
 	if o.NoiseColorA == nil {
 		o.NoiseColorA = color.Black
 	}
@@ -174,5 +176,21 @@ func (o *GhostOptions) setDefaults() {
 	}
 	if o.FrameDelay <= 0 {
 		o.FrameDelay = 4
+	}
+}
+
+// setCanvasDefaults defaults Width and Height, if unset, to fit the
+// rendered text shape (shapeWidth x shapeHeight, from textShape) plus a
+// FontSize-proportional margin for TextDrift's wandering room. It runs
+// separately from setDefaults, and later, because — unlike every other
+// field — the right default genuinely depends on the text being rendered:
+// callers only know shapeWidth/shapeHeight once they've loaded a font and
+// measured the (already line-split) text against it.
+func (o *GhostOptions) setCanvasDefaults(shapeWidth, shapeHeight int) {
+	if o.Width <= 0 {
+		o.Width = shapeWidth + int(math.Round(o.FontSize*canvasMarginXFactor))
+	}
+	if o.Height <= 0 {
+		o.Height = shapeHeight + int(math.Round(o.FontSize*canvasMarginYFactor))
 	}
 }

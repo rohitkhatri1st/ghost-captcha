@@ -2,6 +2,7 @@ package ghostcaptcha
 
 import (
 	"image/color"
+	"math"
 	"testing"
 )
 
@@ -12,11 +13,14 @@ func TestSetDefaultsAppliesZeroValueDefaults(t *testing.T) {
 	if opts.FontSize != defaultFontSize {
 		t.Errorf("FontSize = %v, want %v", opts.FontSize, defaultFontSize)
 	}
-	if opts.Width != defaultWidth {
-		t.Errorf("Width = %v, want %v", opts.Width, defaultWidth)
+	// setDefaults never touches Width/Height - those need the rendered
+	// text shape, which only setCanvasDefaults (tested separately below)
+	// has access to.
+	if opts.Width != 0 {
+		t.Errorf("Width = %v, want 0 (untouched by setDefaults)", opts.Width)
 	}
-	if opts.Height != defaultHeight {
-		t.Errorf("Height = %v, want %v", opts.Height, defaultHeight)
+	if opts.Height != 0 {
+		t.Errorf("Height = %v, want 0 (untouched by setDefaults)", opts.Height)
 	}
 	if opts.NoiseColorA != color.Black {
 		t.Errorf("NoiseColorA = %v, want color.Black", opts.NoiseColorA)
@@ -74,35 +78,55 @@ func TestSetDefaultsPreservesExplicitValues(t *testing.T) {
 	}
 }
 
-func TestSetDefaultsWidthHeightScaleWithFontSize(t *testing.T) {
+func TestSetCanvasDefaultsFitsShapePlusMargin(t *testing.T) {
 	tests := []struct {
-		fontSize              float64
-		wantWidth, wantHeight int
+		fontSize                float64
+		shapeWidth, shapeHeight int
 	}{
-		{defaultFontSize, defaultWidth, defaultHeight},
-		{defaultFontSize * 2, defaultWidth * 2, defaultHeight * 2},
-		{defaultFontSize / 2, defaultWidth / 2, defaultHeight / 2},
+		{defaultFontSize, 252, 82},
+		{defaultFontSize * 2, 504, 164},
+		{100, 10, 5},
 	}
 	for _, tt := range tests {
 		opts := &GhostOptions{FontSize: tt.fontSize}
-		opts.setDefaults()
-		if opts.Width != tt.wantWidth {
-			t.Errorf("FontSize=%v: Width = %d, want %d", tt.fontSize, opts.Width, tt.wantWidth)
+		opts.setCanvasDefaults(tt.shapeWidth, tt.shapeHeight)
+
+		wantWidth := tt.shapeWidth + int(math.Round(tt.fontSize*canvasMarginXFactor))
+		wantHeight := tt.shapeHeight + int(math.Round(tt.fontSize*canvasMarginYFactor))
+		if opts.Width != wantWidth {
+			t.Errorf("FontSize=%v shape=%dx%d: Width = %d, want %d", tt.fontSize, tt.shapeWidth, tt.shapeHeight, opts.Width, wantWidth)
 		}
-		if opts.Height != tt.wantHeight {
-			t.Errorf("FontSize=%v: Height = %d, want %d", tt.fontSize, opts.Height, tt.wantHeight)
+		if opts.Height != wantHeight {
+			t.Errorf("FontSize=%v shape=%dx%d: Height = %d, want %d", tt.fontSize, tt.shapeWidth, tt.shapeHeight, opts.Height, wantHeight)
 		}
 	}
 }
 
-func TestSetDefaultsZeroFontSizeUsesDefaultCanvas(t *testing.T) {
-	// FontSize left at its zero value must resolve to defaultFontSize
-	// before Width/Height are derived, not divide-by-zero or scale off
-	// the raw zero value.
-	opts := &GhostOptions{}
-	opts.setDefaults()
-	if opts.Width != defaultWidth || opts.Height != defaultHeight {
-		t.Errorf("zero FontSize: Width=%d Height=%d, want %d,%d", opts.Width, opts.Height, defaultWidth, defaultHeight)
+func TestSetCanvasDefaultsGrowsWithShapeSize(t *testing.T) {
+	const fontSize = 70
+	small := &GhostOptions{FontSize: fontSize}
+	small.setCanvasDefaults(50, 20)
+
+	large := &GhostOptions{FontSize: fontSize}
+	large.setCanvasDefaults(500, 60)
+
+	if large.Width <= small.Width {
+		t.Errorf("wider shape should default to a wider canvas: small.Width=%d, large.Width=%d", small.Width, large.Width)
+	}
+	if large.Height <= small.Height {
+		t.Errorf("taller shape should default to a taller canvas: small.Height=%d, large.Height=%d", small.Height, large.Height)
+	}
+}
+
+func TestSetCanvasDefaultsPreservesExplicitValues(t *testing.T) {
+	opts := &GhostOptions{FontSize: 70, Width: 999, Height: 888}
+	opts.setCanvasDefaults(50, 20)
+
+	if opts.Width != 999 {
+		t.Errorf("Width = %v, want 999 (explicit value must not be overridden)", opts.Width)
+	}
+	if opts.Height != 888 {
+		t.Errorf("Height = %v, want 888 (explicit value must not be overridden)", opts.Height)
 	}
 }
 
