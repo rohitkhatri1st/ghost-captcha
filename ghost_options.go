@@ -1,6 +1,20 @@
 package ghostcaptcha
 
-import "image/color"
+import (
+	"image/color"
+	"math"
+)
+
+// defaultFontSize is FontSize's zero-value default. defaultWidth and
+// defaultHeight are Width/Height's defaults at defaultFontSize; any other
+// FontSize scales Width and Height proportionally from these, so a bigger
+// font gets a roomier canvas instead of being clipped by a fixed size
+// tuned only for defaultFontSize.
+const (
+	defaultFontSize = 70
+	defaultWidth    = 400
+	defaultHeight   = 100
+)
 
 // GhostOptions controls GenerateGhost's noise animation: the text is drawn
 // entirely out of noise cells that scroll one direction, surrounded by
@@ -9,7 +23,7 @@ import "image/color"
 // the same distribution and keeps moving — but once the animation plays,
 // the two opposing motions make the letterforms stand out.
 type GhostOptions struct {
-	// FontSize is the point size of the font. Default: 24.
+	// FontSize is the point size of the font. Default: 70.
 	FontSize float64
 	// FontBytes holds raw TTF/OTF font data. Default: the embedded Go Mono font.
 	FontBytes []byte
@@ -21,7 +35,10 @@ type GhostOptions struct {
 	// natural spacing.
 	LetterSpacing int
 
-	// Width and Height are the pixel dimensions of the output file. Defaults: 600x100.
+	// Width and Height are the pixel dimensions of the output file.
+	// Defaults: 400x100 at the default FontSize, scaled proportionally to
+	// FontSize otherwise — e.g. doubling FontSize doubles the default
+	// canvas size too, so it doesn't clip a bigger font.
 	Width  int
 	Height int
 
@@ -60,6 +77,15 @@ type GhostOptions struct {
 
 	// Format selects the output container/codec. Default: FormatWebM.
 	Format Format
+
+	// Encoder overrides how GenerateGhost turns rendered frames into output
+	// bytes. Left nil, GenerateGhost picks its own GIF/WebM/MP4 encoder
+	// based on Format. Set it to encode the frames yourself instead — with
+	// different settings than GenerateGhost's own encoders, or into a
+	// format it doesn't support at all. Call GenerateGhostFrames directly
+	// if you'd rather skip GenerateGhost and its Format/ffmpeg handling
+	// entirely.
+	Encoder FrameEncoder
 }
 
 // Format selects GenerateGhost's output container/codec.
@@ -126,13 +152,13 @@ const (
 
 func (o *GhostOptions) setDefaults() {
 	if o.FontSize <= 0 {
-		o.FontSize = 70
+		o.FontSize = defaultFontSize
 	}
 	if o.Width <= 0 {
-		o.Width = 400
+		o.Width = int(math.Round((o.FontSize / defaultFontSize) * defaultWidth))
 	}
 	if o.Height <= 0 {
-		o.Height = 100
+		o.Height = int(math.Round((o.FontSize / defaultFontSize) * defaultHeight))
 	}
 	if o.NoiseColorA == nil {
 		o.NoiseColorA = color.Black

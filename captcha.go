@@ -52,7 +52,6 @@ func GenerateCaptcha(opts CaptchaOptions) (text string, data []byte, err error) 
 	return text, data, nil
 }
 
-// TODO: Fill this function correctly
 func getCaptchaGhostOptsDefaults(opts *CaptchaOptions) *GhostOptions {
 	return &opts.Ghost
 }

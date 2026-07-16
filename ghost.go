@@ -14,6 +14,13 @@ import (
 	"golang.org/x/image/font"
 )
 
+// FrameEncoder turns rendered ghost frames into final output bytes. opts is
+// whatever GhostOptions GenerateGhost was called with, so an encoder can
+// read Width, Height, FrameDelay, Loop, Format, or any options a custom
+// encoder cares about. Setting GhostOptions.Encoder overrides GenerateGhost's
+// own GIF/WebM/MP4 encoding with this function instead.
+type FrameEncoder func(frames []*image.Paletted, delays []int, opts *GhostOptions) ([]byte, error)
+
 // GenerateGhost renders text as an animated "ghost text" GIF or video. The
 // letterforms are filled with noise that scrolls one direction, surrounded
 // by noise that scrolls the opposite direction. A single frame is just
@@ -26,46 +33,93 @@ import (
 // The animation is exactly one seamless loop: the last frame flows straight
 // back into the first with no jump. opts.Format selects the output file
 // format; the video formats (FormatWebM, FormatMP4) need ffmpeg installed
-// and on PATH.
+// and on PATH, unless opts.Encoder is set to something that doesn't need it.
+//
+// GenerateGhost is just GenerateGhostFrames plus an encoding step. Call
+// GenerateGhostFrames directly to get the raw frames and encode them
+// yourself, or set opts.Encoder to reuse GenerateGhost's rendering with your
+// own encoding logic in place of its default GIF/WebM/MP4 encoders.
 func GenerateGhost(text string, opts *GhostOptions) ([]byte, error) {
+	opts.setDefaults()
+
+	encode := opts.Encoder
+	if encode == nil {
+		encode = defaultFrameEncoder(opts.Format)
+
+		// Check ffmpeg is available before spending time rendering frames,
+		// so a missing dependency fails fast with a clear error instead of
+		// surfacing deep inside encodeVideo after all that work. Only
+		// GenerateGhost's own video encoders need ffmpeg; a custom Encoder
+		// is responsible for checking its own dependencies.
+		if opts.Format != FormatGIF {
+			if _, err := exec.LookPath("ffmpeg"); err != nil {
+				return nil, fmt.Errorf("ghostfont: %s output requires ffmpeg on PATH: %w", opts.Format, err)
+			}
+		}
+	}
+
+	frames, delays, err := GenerateGhostFrames(text, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := encode(frames, delays, opts)
+	if err != nil {
+		return nil, fmt.Errorf("ghostfont: encoding %s: %w", opts.Format, err)
+	}
+	return data, nil
+}
+
+// GenerateGhostFrames renders the raw ghost-text animation frames for text,
+// without encoding them into any container format. delays holds each
+// frame's display duration in centiseconds (1/100s), matching image/gif's
+// Delay field convention, at index i for frames[i]. Use this directly when
+// you want to encode the animation yourself — into GIF/WebM/MP4 with
+// different settings than GenerateGhost's, or into a format it doesn't
+// support at all.
+func GenerateGhostFrames(text string, opts *GhostOptions) (frames []*image.Paletted, delays []int, err error) {
 	if text == "" {
-		return nil, errors.New("ghostfont: text must not be empty")
+		return nil, nil, errors.New("ghostfont: text must not be empty")
 	}
 	text = lineEndingReplacer.Replace(text)
 	opts.setDefaults()
 
-	// Check ffmpeg is available before spending time rendering frames,
-	// so a missing dependency fails fast with a clear error instead of
-	// surfacing deep inside encodeVideo after all that work.
-	if opts.Format != FormatGIF {
-		if _, err := exec.LookPath("ffmpeg"); err != nil {
-			return nil, fmt.Errorf("ghostfont: %s output requires ffmpeg on PATH: %w", opts.Format, err)
-		}
-	}
-
 	face, err := loadFace(opts.FontBytes, opts.FontSize)
 	if err != nil {
-		return nil, fmt.Errorf("ghostfont: loading font: %w", err)
+		return nil, nil, fmt.Errorf("ghostfont: loading font: %w", err)
 	}
 	defer face.Close()
 
-	frames, delays := renderGhostFrames(face, text, opts)
+	frames, delays = renderGhostFrames(face, text, opts)
+	return frames, delays, nil
+}
 
-	if opts.Format == FormatGIF {
-		g := &gif.GIF{Image: frames, Delay: delays, LoopCount: opts.Loop}
-		var buf bytes.Buffer
-		if err := gif.EncodeAll(&buf, g); err != nil {
-			return nil, fmt.Errorf("ghostfont: encoding gif: %w", err)
-		}
-		return buf.Bytes(), nil
+// defaultFrameEncoder returns the FrameEncoder GenerateGhost uses when
+// opts.Encoder is left unset: encodeGIF for FormatGIF, encodeVideoFrames
+// (ffmpeg-backed) for everything else.
+func defaultFrameEncoder(format Format) FrameEncoder {
+	if format == FormatGIF {
+		return encodeGIF
 	}
+	return encodeVideoFrames
+}
 
+// encodeGIF is the default FrameEncoder for FormatGIF: a paletted, looping
+// animated GIF using only the Go standard library.
+func encodeGIF(frames []*image.Paletted, delays []int, opts *GhostOptions) ([]byte, error) {
+	g := &gif.GIF{Image: frames, Delay: delays, LoopCount: opts.Loop}
+	var buf bytes.Buffer
+	if err := gif.EncodeAll(&buf, g); err != nil {
+		return nil, fmt.Errorf("encoding gif: %w", err)
+	}
+	return buf.Bytes(), nil
+}
+
+// encodeVideoFrames is the default FrameEncoder for FormatWebM and
+// FormatMP4: it pipes frames to ffmpeg via encodeVideo.
+func encodeVideoFrames(frames []*image.Paletted, delays []int, opts *GhostOptions) ([]byte, error) {
 	fps := fmt.Sprintf("100/%d", opts.FrameDelay)
-	data, err := encodeVideo(frames, opts.Width, opts.Height, fps, opts.Format)
-	if err != nil {
-		return nil, fmt.Errorf("ghostfont: encoding video: %w", err)
-	}
-	return data, nil
+	return encodeVideo(frames, opts.Width, opts.Height, fps, opts.Format)
 }
 
 func renderGhostFrames(face font.Face, text string, opts *GhostOptions) ([]*image.Paletted, []int) {
