@@ -41,6 +41,8 @@
   p.repo-link { margin-top: 0.5rem; }
   p.repo-link a { color: var(--accent); font-weight: 600; text-decoration: none; }
   p.repo-link a:hover { text-decoration: underline; }
+  fieldset.challenge { margin-top: 1.5rem; }
+  fieldset.challenge #challengeFeedback:empty { display: none; }
   .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 1.5rem; }
   @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } }
   fieldset {
@@ -89,7 +91,30 @@
     padding: 1rem;
     text-align: center;
   }
-  .output img { max-width: 100%; border-radius: 6px; }
+  .output img { max-width: 100%; border-radius: 6px; cursor: zoom-in; }
+  .zoom-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    cursor: zoom-out;
+    z-index: 1000;
+  }
+  .zoom-overlay[hidden] { display: none; }
+  .zoom-overlay img {
+    /* width (not max-width) so a small captcha image actually enlarges
+       instead of just being re-centered at its original size; height:auto
+       plus max-height keeps the aspect ratio intact either way. */
+    width: min(85vw, 900px);
+    height: auto;
+    max-height: 85vh;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  }
   .status { color: var(--muted); font-size: 0.9rem; }
   .status.error { color: var(--error); }
   a.download {
@@ -115,6 +140,28 @@
   <a href="https://github.com/rohitkhatri1st/ghost-captcha">View source on GitHub →</a>
 </p>
 
+<fieldset class="challenge">
+  <legend>🎮 Can you read it?</legend>
+  <p class="hint" style="margin-top: 0;">
+    This is the actual anti-bot check: watch the animation and type what it
+    says. The answer never leaves the WebAssembly side, so there's nothing
+    in this page's JavaScript to read it out of.
+  </p>
+  <div class="output" id="challengeOutput" style="min-height: 140px;">
+    <p class="status" id="challengeStatus">Loading WebAssembly…</p>
+  </div>
+  <form id="challengeForm">
+    <label for="challengeGuess">Your answer</label>
+    <input type="text" id="challengeGuess" autocomplete="off" autocapitalize="characters" placeholder="Type what you see" disabled>
+    <div class="field-pair" style="margin-top: 0.6rem;">
+      <button type="submit" id="challengeSubmit" disabled>Check</button>
+      <button type="button" id="challengeNew" disabled>New challenge</button>
+    </div>
+  </form>
+  <p class="status" id="challengeFeedback"></p>
+  <p class="hint" id="challengeScore">Score: 0 correct / 0 tries</p>
+</fieldset>
+
 <div class="layout">
   <form id="form">
     <fieldset>
@@ -135,11 +182,11 @@
       <div class="field-pair">
         <div>
           <label for="width">Width (blank = auto)</label>
-          <input type="number" id="width" placeholder="auto">
+          <input type="number" id="width" placeholder="auto" min="10" max="800">
         </div>
         <div>
           <label for="height">Height (blank = auto)</label>
-          <input type="number" id="height" placeholder="auto">
+          <input type="number" id="height" placeholder="auto" min="10" max="800">
         </div>
       </div>
 
@@ -177,12 +224,13 @@
       </div>
 
       <label for="frames">Frames (blank = auto; caps animation length)</label>
-      <input type="number" id="frames" placeholder="auto" min="1">
+      <input type="number" id="frames" placeholder="auto" min="1" max="300">
       <p class="hint">
-        Bigger font sizes and frame counts render slower here than on a
-        real machine: this runs single-threaded in the browser via
-        WebAssembly. Keep font size under ~80 and frames under ~150 for a
-        snappy preview.
+        Bigger font sizes, canvas sizes, and frame counts render slower
+        here than on a real machine: this runs single-threaded in the
+        browser via WebAssembly. Width/height/frames are capped above to
+        keep this page responsive; for larger output, use the Go library
+        directly.
       </p>
 
       <label for="textDrift">Text drift</label>
@@ -211,12 +259,25 @@
   and its <a href="https://pkg.go.dev/github.com/rohitkhatri1st/ghost-captcha">docs</a>.
 </footer>
 
+<div class="zoom-overlay" id="zoomOverlay" hidden>
+  <img id="zoomImage" alt="">
+</div>
+
 <script src="wasm_exec.js"></script>
 <script>
 (() => {
   const generateBtn = document.getElementById("generate");
   const statusEl = document.getElementById("status");
   const outputEl = document.getElementById("output");
+
+  const challengeOutputEl = document.getElementById("challengeOutput");
+  const challengeGuessEl = document.getElementById("challengeGuess");
+  const challengeSubmitBtn = document.getElementById("challengeSubmit");
+  const challengeNewBtn = document.getElementById("challengeNew");
+  const challengeFeedbackEl = document.getElementById("challengeFeedback");
+  const challengeScoreEl = document.getElementById("challengeScore");
+  let challengeAttempts = 0;
+  let challengeCorrect = 0;
 
   function setStatus(text, isError) {
     outputEl.innerHTML = "";
@@ -226,22 +287,100 @@
     outputEl.appendChild(p);
   }
 
+  function setChallengeStatus(text, isError) {
+    challengeOutputEl.innerHTML = "";
+    const p = document.createElement("p");
+    p.className = "status" + (isError ? " error" : "");
+    p.textContent = text;
+    challengeOutputEl.appendChild(p);
+  }
+
+  // newChallenge asks the WASM side for a fresh random captcha - it never
+  // gets the answer back, only the rendered GIF, so there's no answer
+  // sitting in this page's JS for someone to just read out.
+  function newChallenge() {
+    setChallengeStatus("Generating…", false);
+    challengeFeedbackEl.textContent = "";
+    challengeGuessEl.value = "";
+    challengeSubmitBtn.disabled = true;
+
+    // Same reasoning as generate(): let "Generating…" repaint before the
+    // blocking WASM call runs.
+    setTimeout(() => {
+      const result = window.generateGhostCaptcha();
+      if (!result.ok) {
+        setChallengeStatus("Error: " + result.error, true);
+        return;
+      }
+      challengeOutputEl.innerHTML = "";
+      const img = document.createElement("img");
+      img.src = result.dataURL;
+      img.alt = "ghost-captcha challenge";
+      challengeOutputEl.appendChild(img);
+      challengeSubmitBtn.disabled = false;
+      challengeGuessEl.focus();
+    }, 20);
+  }
+
+  // checkChallenge only ever learns "correct" or "not correct" from
+  // checkGhostCaptcha - the actual answer stays on the WASM side even
+  // here, so this can't leak it through a debugger either.
+  function checkChallenge() {
+    const guess = challengeGuessEl.value.trim();
+    if (!guess) return;
+
+    const result = window.checkGhostCaptcha(guess);
+    if (!result.ok) {
+      challengeFeedbackEl.className = "status error";
+      challengeFeedbackEl.textContent = "Error: " + result.error;
+      return;
+    }
+
+    challengeAttempts++;
+    if (result.correct) challengeCorrect++;
+    challengeScoreEl.textContent = `Score: ${challengeCorrect} correct / ${challengeAttempts} tries`;
+
+    challengeFeedbackEl.className = "status" + (result.correct ? "" : " error");
+    challengeFeedbackEl.textContent = result.correct
+      ? "✅ Correct! Click \"New challenge\" for another."
+      : "❌ Not quite — take another look and try again.";
+  }
+
   function numberOrZero(id) {
     const v = document.getElementById(id).value;
     return v === "" ? 0 : Number(v);
   }
 
+  // clampedNumberOrZero reads a numeric field the same way numberOrZero
+  // does (blank stays 0, GhostOptions' own "unset" convention), but also
+  // clamps a non-blank value to the input's own min/max attributes and
+  // writes the clamped value back so the field visibly reflects it. The
+  // HTML min/max alone don't stop this: nothing here calls
+  // reportValidity(), so a typed value outside that range would otherwise
+  // reach the WASM renderer as-is - and an oversized width/height/frames
+  // is exactly what makes this single-threaded, in-browser render freeze
+  // the page.
+  function clampedNumberOrZero(id) {
+    const el = document.getElementById(id);
+    if (el.value === "") return 0;
+    let n = Number(el.value);
+    if (el.min !== "" && n < Number(el.min)) n = Number(el.min);
+    if (el.max !== "" && n > Number(el.max)) n = Number(el.max);
+    if (String(n) !== el.value) el.value = n;
+    return n;
+  }
+
   function collectOptions() {
     return {
-      fontSize: numberOrZero("fontSize"),
+      fontSize: clampedNumberOrZero("fontSize"),
       letterSpacing: numberOrZero("letterSpacing"),
-      width: numberOrZero("width"),
-      height: numberOrZero("height"),
+      width: clampedNumberOrZero("width"),
+      height: clampedNumberOrZero("height"),
       noiseColorA: document.getElementById("noiseColorA").value,
       noiseColorB: document.getElementById("noiseColorB").value,
       backgroundCellSize: numberOrZero("backgroundCellSize"),
       textCellSize: numberOrZero("textCellSize"),
-      frames: numberOrZero("frames"),
+      frames: clampedNumberOrZero("frames"),
       frameDelay: numberOrZero("frameDelay"),
       loop: numberOrZero("loop"),
       textDrift: numberOrZero("textDrift"),
@@ -281,10 +420,48 @@
     }, 20);
   }
 
+  const zoomOverlay = document.getElementById("zoomOverlay");
+  const zoomImage = document.getElementById("zoomImage");
+
+  function openZoom(img) {
+    zoomImage.src = img.src;
+    zoomImage.alt = img.alt;
+    zoomOverlay.hidden = false;
+  }
+
+  function closeZoom() {
+    zoomOverlay.hidden = true;
+    zoomImage.src = "";
+  }
+
+  // Delegated on document rather than bound per-<img> since both the
+  // generator's and challenge's images are replaced wholesale (innerHTML =
+  // "" + a fresh <img>) every time a new one renders.
+  document.addEventListener("click", (e) => {
+    const img = e.target.closest(".output img");
+    if (img) {
+      openZoom(img);
+      return;
+    }
+    if (e.target.closest("#zoomOverlay")) {
+      closeZoom();
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !zoomOverlay.hidden) closeZoom();
+  });
+
   document.getElementById("form").addEventListener("submit", (e) => {
     e.preventDefault();
     generate();
   });
+
+  document.getElementById("challengeForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    checkChallenge();
+  });
+  challengeNewBtn.addEventListener("click", newChallenge);
 
   const go = new Go();
   // instantiateStreaming requires the server to report main.wasm with an
@@ -308,9 +485,14 @@
       generateBtn.disabled = false;
       generateBtn.textContent = "Generate";
       setStatus("Ready. Click Generate.", false);
+
+      challengeNewBtn.disabled = false;
+      challengeGuessEl.disabled = false;
+      newChallenge();
     })
     .catch((err) => {
       setStatus("Failed to load WebAssembly: " + err, true);
+      setChallengeStatus("Failed to load WebAssembly: " + err, true);
     });
 })();
 </script>
