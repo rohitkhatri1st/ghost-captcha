@@ -9,14 +9,12 @@ import (
 
 // Basic usage: draw random captcha text and render it. text is what the
 // caller checks a user's answer against; data is the encoded image to show
-// them. Format is set to FormatGIF here so this example needs no ffmpeg -
-// it's the default for GenerateGhost, GenerateCaptcha's Format is FormatWebM
-// unless overridden.
+// them. Format defaults to FormatGIF, so this example needs no ffmpeg.
 func ExampleGenerateCaptcha() {
 	text, data, err := ghostcaptcha.GenerateCaptcha(ghostcaptcha.CaptchaOptions{
 		// Frames is capped only to keep this example quick to run; it has
 		// no effect on the defaulted Width/Height shown elsewhere below.
-		Ghost: ghostcaptcha.GhostOptions{Format: ghostcaptcha.FormatGIF, Frames: 10},
+		Ghost: ghostcaptcha.GhostOptions{Frames: 10},
 	})
 	if err != nil {
 		fmt.Println("error:", err)
@@ -31,7 +29,7 @@ func ExampleGenerateCaptcha_customCharset() {
 	text, _, err := ghostcaptcha.GenerateCaptcha(ghostcaptcha.CaptchaOptions{
 		Length:  4,
 		Charset: "AB",
-		Ghost:   ghostcaptcha.GhostOptions{Format: ghostcaptcha.FormatGIF, Frames: 10},
+		Ghost:   ghostcaptcha.GhostOptions{Frames: 10},
 	})
 	if err != nil {
 		fmt.Println("error:", err)
@@ -53,7 +51,6 @@ func ExampleGenerateCaptcha_customCharset() {
 // to fit however many lines and however long they are).
 func ExampleGenerateGhost() {
 	data, err := ghostcaptcha.GenerateGhost("HELLO\nWORLD", &ghostcaptcha.GhostOptions{
-		Format:    ghostcaptcha.FormatGIF,
 		TextDrift: ghostcaptcha.TextDriftEllipse,
 		Frames:    10, // capped only to keep this example quick to run
 	})

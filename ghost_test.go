@@ -5,6 +5,7 @@ import (
 	"errors"
 	"image"
 	"image/gif"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -153,6 +154,25 @@ func TestGenerateGhostGIFRoundTrip(t *testing.T) {
 	}
 	if decoded.LoopCount != opts.Loop {
 		t.Errorf("decoded LoopCount = %d, want %d", decoded.LoopCount, opts.Loop)
+	}
+}
+
+func TestGenerateGhostWebMDefaultEncoder(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg not on PATH")
+	}
+	// Exercises the real default-encoder path for video Formats end to
+	// end (GenerateGhost -> defaultFrameEncoder -> encodeVideoFrames ->
+	// encodeVideo), which every other WebM/MP4 test bypasses: they either
+	// call encodeVideo directly or supply a custom Encoder.
+	opts := smallOpts()
+	opts.Format = FormatWebM
+	data, err := GenerateGhost("HI", opts)
+	if err != nil {
+		t.Fatalf("GenerateGhost(FormatWebM): %v", err)
+	}
+	if len(data) == 0 {
+		t.Fatal("GenerateGhost returned empty data")
 	}
 }
 

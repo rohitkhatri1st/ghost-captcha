@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ghost-captcha</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --fg: #1a1a1a;
+    --bg: #ffffff;
+    --panel: #f4f4f5;
+    --border: #d8d8dc;
+    --accent: #4f46e5;
+    --error: #b91c1c;
+    --muted: #666;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fg: #e8e8ea;
+      --bg: #121214;
+      --panel: #1c1c1f;
+      --border: #333338;
+      --accent: #818cf8;
+      --error: #f87171;
+      --muted: #9a9aa2;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 960px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.5;
+  }
+  h1 { margin-bottom: 0.25rem; }
+  p.subtitle { color: var(--muted); margin-top: 0; }
+  .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 1.5rem; }
+  @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } }
+  fieldset {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    background: var(--panel);
+  }
+  legend { padding: 0 0.4rem; font-weight: 600; }
+  label { display: block; font-size: 0.85rem; margin: 0.6rem 0 0.2rem; }
+  label.row-of-two { display: inline-block; width: 48%; }
+  label.row-of-two + label.row-of-two { margin-left: 4%; }
+  input[type="text"], input[type="number"], select, textarea {
+    width: 100%;
+    padding: 0.4rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--fg);
+    font: inherit;
+  }
+  textarea { min-height: 4.5rem; resize: vertical; }
+  input[type="color"] { width: 100%; height: 2.1rem; padding: 0.15rem; }
+  .hint { color: var(--muted); font-size: 0.78rem; margin: 0.2rem 0 0; }
+  button {
+    margin-top: 1.2rem;
+    width: 100%;
+    padding: 0.65rem;
+    font: inherit;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent);
+    color: white;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .output {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
+  }
+  .output img { max-width: 100%; border-radius: 6px; }
+  .status { color: var(--muted); font-size: 0.9rem; }
+  .status.error { color: var(--error); }
+  a.download {
+    display: inline-block;
+    margin-top: 0.8rem;
+    font-size: 0.9rem;
+    color: var(--accent);
+  }
+  footer { margin-top: 2rem; color: var(--muted); font-size: 0.85rem; }
+  footer a { color: inherit; }
+  code { background: var(--panel); padding: 0.1rem 0.3rem; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<h1>ghost-captcha</h1>
+<p class="subtitle">
+  Type any text, generate an animated "ghost text" GIF entirely in your
+  browser — no server, no upload. The letterforms are invisible in any
+  single frame; watch the animation play to see them.
+</p>
+
+<div class="layout">
+  <form id="form">
+    <fieldset>
+      <legend>Text</legend>
+      <label for="text">Text (use a newline for multiple lines)</label>
+      <textarea id="text">HELLO</textarea>
+    </fieldset>
+
+    <fieldset style="margin-top: 1rem;">
+      <legend>Options</legend>
+
+      <label for="fontSize">Font size</label>
+      <input type="number" id="fontSize" value="48" min="8" max="120">
+
+      <label for="letterSpacing">Letter spacing</label>
+      <input type="number" id="letterSpacing" value="0">
+
+      <label class="row-of-two" for="width">Width (blank = auto)</label>
+      <label class="row-of-two" for="height">Height (blank = auto)</label>
+      <input class="row-of-two" type="number" id="width" placeholder="auto">
+      <input class="row-of-two" type="number" id="height" placeholder="auto">
+
+      <label class="row-of-two" for="noiseColorA">Noise color A</label>
+      <label class="row-of-two" for="noiseColorB">Noise color B</label>
+      <input class="row-of-two" type="color" id="noiseColorA" value="#000000">
+      <input class="row-of-two" type="color" id="noiseColorB" value="#ffffff">
+
+      <label class="row-of-two" for="backgroundCellSize">Background cell size</label>
+      <label class="row-of-two" for="textCellSize">Text cell size</label>
+      <input class="row-of-two" type="number" id="backgroundCellSize" value="1" min="1">
+      <input class="row-of-two" type="number" id="textCellSize" value="1" min="1">
+
+      <label class="row-of-two" for="frameDelay">Frame delay (centiseconds)</label>
+      <label class="row-of-two" for="loop">Loop count (0 = forever)</label>
+      <input class="row-of-two" type="number" id="frameDelay" value="4" min="1">
+      <input class="row-of-two" type="number" id="loop" value="0" min="0">
+
+      <label for="frames">Frames (blank = auto; caps animation length)</label>
+      <input type="number" id="frames" placeholder="auto" min="1">
+      <p class="hint">
+        Bigger font sizes and frame counts render slower here than on a
+        real machine: this runs single-threaded in the browser via
+        WebAssembly. Keep font size under ~80 and frames under ~150 for a
+        snappy preview.
+      </p>
+
+      <label for="textDrift">Text drift</label>
+      <select id="textDrift">
+        <option value="0">Random (default)</option>
+        <option value="1">Fixed</option>
+        <option value="2">Ellipse</option>
+        <option value="3">Horizontal</option>
+        <option value="4">Vertical</option>
+      </select>
+    </fieldset>
+
+    <button id="generate" type="submit" disabled>Loading WebAssembly…</button>
+  </form>
+
+  <div class="output" id="output">
+    <p class="status" id="status">Nothing generated yet.</p>
+  </div>
+</div>
+
+<footer>
+  Only GIF output runs in-browser (video formats need ffmpeg, which has no
+  meaning inside WebAssembly). For WebM/MP4, custom encoders, or
+  server-side use, see the
+  <a href="https://github.com/rohitkhatri1st/ghost-captcha">Go library</a>
+  and its <a href="https://pkg.go.dev/github.com/rohitkhatri1st/ghost-captcha">docs</a>.
+</footer>
+
+<script src="wasm_exec.js"></script>
+<script>
+(() => {
+  const generateBtn = document.getElementById("generate");
+  const statusEl = document.getElementById("status");
+  const outputEl = document.getElementById("output");
+
+  function setStatus(text, isError) {
+    outputEl.innerHTML = "";
+    const p = document.createElement("p");
+    p.className = "status" + (isError ? " error" : "");
+    p.textContent = text;
+    outputEl.appendChild(p);
+  }
+
+  function numberOrZero(id) {
+    const v = document.getElementById(id).value;
+    return v === "" ? 0 : Number(v);
+  }
+
+  function collectOptions() {
+    return {
+      fontSize: numberOrZero("fontSize"),
+      letterSpacing: numberOrZero("letterSpacing"),
+      width: numberOrZero("width"),
+      height: numberOrZero("height"),
+      noiseColorA: document.getElementById("noiseColorA").value,
+      noiseColorB: document.getElementById("noiseColorB").value,
+      backgroundCellSize: numberOrZero("backgroundCellSize"),
+      textCellSize: numberOrZero("textCellSize"),
+      frames: numberOrZero("frames"),
+      frameDelay: numberOrZero("frameDelay"),
+      loop: numberOrZero("loop"),
+      textDrift: numberOrZero("textDrift"),
+    };
+  }
+
+  function generate() {
+    const text = document.getElementById("text").value;
+    if (!text) {
+      setStatus("Enter some text first.", true);
+      return;
+    }
+    setStatus("Generating…", false);
+    generateBtn.disabled = true;
+
+    // Let the DOM repaint the "Generating…" status before the (blocking,
+    // single-threaded) WASM call runs, so the button doesn't look frozen.
+    setTimeout(() => {
+      const result = window.generateGhostGIF(text, collectOptions());
+      generateBtn.disabled = false;
+      if (!result.ok) {
+        setStatus("Error: " + result.error, true);
+        return;
+      }
+      outputEl.innerHTML = "";
+      const img = document.createElement("img");
+      img.src = result.dataURL;
+      img.alt = "generated ghost-captcha";
+      outputEl.appendChild(img);
+
+      const link = document.createElement("a");
+      link.className = "download";
+      link.href = result.dataURL;
+      link.download = "ghost-captcha.gif";
+      link.textContent = "Download GIF";
+      outputEl.appendChild(link);
+    }, 20);
+  }
+
+  document.getElementById("form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    generate();
+  });
+
+  const go = new Go();
+  // instantiateStreaming requires the server to report main.wasm with an
+  // application/wasm content type; some static hosts get that wrong, so
+  // fall back to a plain fetch + instantiate (which doesn't care about
+  // content type) rather than failing outright.
+  async function loadWasm() {
+    try {
+      return await WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject);
+    } catch {
+      // Re-fetch rather than reusing the first Response: instantiateStreaming
+      // may have already started consuming its body before failing.
+      const bytes = await (await fetch("main.wasm")).arrayBuffer();
+      return await WebAssembly.instantiate(bytes, go.importObject);
+    }
+  }
+
+  loadWasm()
+    .then((result) => {
+      go.run(result.instance);
+      generateBtn.disabled = false;
+      generateBtn.textContent = "Generate";
+      setStatus("Ready. Click Generate.", false);
+    })
+    .catch((err) => {
+      setStatus("Failed to load WebAssembly: " + err, true);
+    });
+})();
+</script>
+</body>
+</html>

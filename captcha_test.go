@@ -3,7 +3,6 @@ package ghostcaptcha
 import (
 	"bytes"
 	"image/gif"
-	"os/exec"
 	"strings"
 	"testing"
 )
@@ -131,20 +130,18 @@ func TestGenerateCaptchaPropagatesGhostError(t *testing.T) {
 	}
 }
 
-func TestGenerateCaptchaDefaultFormatIsWebM(t *testing.T) {
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		t.Skip("ffmpeg not on PATH; skipping default (video) format test")
-	}
+func TestGenerateCaptchaDefaultFormatIsGIF(t *testing.T) {
 	// Leaving Ghost entirely at its zero value exercises GenerateCaptcha's
 	// true default path, including GenerateGhost's default Format
-	// (FormatWebM) and full-size canvas - so this one is slower than the
-	// fastCaptchaGhost-based tests above.
+	// (FormatGIF) and full-size canvas - so this one is slower than the
+	// fastCaptchaGhost-based tests above. It needs no ffmpeg, since GIF is
+	// the default precisely so this always works with no dependencies.
 	_, data, err := GenerateCaptcha(CaptchaOptions{})
 	if err != nil {
 		t.Fatalf("GenerateCaptcha with zero-value options: %v", err)
 	}
-	if len(data) == 0 {
-		t.Error("GenerateCaptcha returned empty data")
+	if _, err := gif.DecodeAll(bytes.NewReader(data)); err != nil {
+		t.Errorf("default output does not decode as GIF: %v", err)
 	}
 }
 

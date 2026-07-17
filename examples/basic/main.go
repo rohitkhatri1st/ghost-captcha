@@ -4,8 +4,8 @@
 //
 //	go run ./examples/basic
 //
-// GhostOptions.Format defaults to FormatWebM, so this needs ffmpeg on PATH;
-// see the package examples (godoc) for FormatGIF, which doesn't.
+// GhostOptions.Format defaults to FormatGIF, which needs no ffmpeg; set it
+// to FormatWebM or FormatMP4 instead for video output (needs ffmpeg on PATH).
 package main
 
 import (
@@ -18,8 +18,8 @@ import (
 func main() {
 	data, err := ghostcaptcha.GenerateGhost("CAPTCHA", &ghostcaptcha.GhostOptions{
 		LetterSpacing: 7,
-		Format:        ghostcaptcha.FormatGIF,
-		FontSize:      100,
+		// Format:        ghostcaptcha.FormatGIF,
+		FontSize: 100,
 	})
 	if err != nil {
 		panic(err)

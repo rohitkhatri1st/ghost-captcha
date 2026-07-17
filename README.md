@@ -71,14 +71,31 @@ runnable demo in [examples/basic](examples/basic/main.go):
 go run ./examples/basic
 ```
 
+## Try it in your browser
+
+No Go install needed: [wasm/main.go](wasm/main.go) compiles this library to
+WebAssembly, and [docs/index.html](docs/index.html) is a small static page
+that calls it — type text, pick options, get a GIF, entirely client-side
+(only GIF works this way; WebM/MP4 need real ffmpeg, which WASM can't run).
+
+To host it on GitHub Pages: Settings → Pages → Source: "GitHub Actions".
+[.github/workflows/pages.yml](.github/workflows/pages.yml) then builds
+`docs/main.wasm` and deploys `docs/` on every push to `main` — the compiled
+binary is never committed, so `go get`-ing this package never downloads it.
+To build and try it locally instead:
+
+```sh
+GOOS=js GOARCH=wasm go build -o docs/main.wasm ./wasm
+```
+
 ## Output formats
 
 `GhostOptions.Format` selects the container:
 
 | Format | Dependencies | Notes |
 | --- | --- | --- |
-| `FormatGIF` | none | Larger files, but no external dependency |
-| `FormatWebM` (default) | `ffmpeg` on `PATH` | Smaller/faster than GIF |
+| `FormatGIF` (default) | none | Larger files, but no external dependency |
+| `FormatWebM` | `ffmpeg` on `PATH` | Smaller/faster than GIF |
 | `FormatMP4` | `ffmpeg` on `PATH` | For players/browsers without WebM |
 
 If you need frames in a format this package doesn't encode to, call

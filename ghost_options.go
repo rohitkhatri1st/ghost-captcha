@@ -83,7 +83,7 @@ type GhostOptions struct {
 	// Default: TextDriftRandom.
 	TextDrift TextDrift
 
-	// Format selects the output container/codec. Default: FormatWebM.
+	// Format selects the output container/codec. Default: FormatGIF.
 	Format Format
 
 	// Encoder overrides how GenerateGhost turns rendered frames into output
@@ -100,17 +100,17 @@ type GhostOptions struct {
 type Format int
 
 const (
-	// FormatWebM encodes VP8 video in a WebM container using ffmpeg's
-	// libvpx encoder at its realtime/fastest settings. This is the
-	// default: since ghost-captcha images are generated per-request
-	// rather than authored once, encode speed matters more than the
-	// extra compression VP9 or AV1 would buy at a much higher CPU cost.
-	// Requires ffmpeg on PATH.
-	FormatWebM Format = iota
 	// FormatGIF encodes a paletted, looping animated GIF using only the
-	// Go standard library — no ffmpeg dependency, but a much larger file
-	// for the same animation than either video format.
-	FormatGIF
+	// Go standard library. This is the default: it has no dependency on
+	// ffmpeg being installed (or even runnable at all, e.g. compiled to
+	// WebAssembly), at the cost of a much larger file for the same
+	// animation than either video format.
+	FormatGIF Format = iota
+	// FormatWebM encodes VP8 video in a WebM container using ffmpeg's
+	// libvpx encoder at its realtime/fastest settings, for callers who'd
+	// rather have a smaller/faster file than a dependency-free one.
+	// Requires ffmpeg on PATH.
+	FormatWebM
 	// FormatMP4 encodes H.264 video (libx264, "ultrafast" preset) in an
 	// MP4 container, for players/browsers that don't support WebM.
 	// Requires ffmpeg on PATH.
@@ -120,12 +120,12 @@ const (
 // String returns the format's lowercase name, e.g. for error messages.
 func (f Format) String() string {
 	switch f {
-	case FormatGIF:
-		return "gif"
+	case FormatWebM:
+		return "webm"
 	case FormatMP4:
 		return "mp4"
 	default:
-		return "webm"
+		return "gif"
 	}
 }
 

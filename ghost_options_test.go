@@ -138,7 +138,7 @@ func TestFormatString(t *testing.T) {
 		{FormatWebM, "webm"},
 		{FormatGIF, "gif"},
 		{FormatMP4, "mp4"},
-		{Format(99), "webm"}, // unknown values fall back to the default case
+		{Format(99), "gif"}, // unknown values fall back to the default case
 	}
 	for _, tt := range tests {
 		if got := tt.format.String(); got != tt.want {

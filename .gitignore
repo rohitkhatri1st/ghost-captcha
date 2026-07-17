@@ -23,6 +23,10 @@ profile.cov
 # Generated output from running examples/
 output_captcha.*
 
+# Compiled by .github/workflows/pages.yml at deploy time - never committed,
+# so module downloads of this package never carry a multi-MB binary.
+docs/main.wasm
+
 # Go workspace file
 go.work
 go.work.sum
