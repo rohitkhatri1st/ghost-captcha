@@ -59,7 +59,7 @@ call. To render specific text instead of a random captcha, call
 
 ```go
 data, err := ghostcaptcha.GenerateGhost("HELLO", &ghostcaptcha.GhostOptions{
-	TextDrift: ghostcaptcha.TextDriftEllipse,
+    TextDrift: ghostcaptcha.TextDriftEllipse,
 })
 ```
 
@@ -71,18 +71,21 @@ runnable demo in [examples/basic](examples/basic/main.go):
 go run ./examples/basic
 ```
 
-## Try it in your browser
+## Try it live
 
-No Go install needed: [wasm/main.go](wasm/main.go) compiles this library to
-WebAssembly, and [docs/index.html](docs/index.html) is a small static page
-that calls it — type text, pick options, get a GIF, entirely client-side
-(only GIF works this way; WebM/MP4 need real ffmpeg, which WASM can't run).
+**[rohitkhatri1st.github.io/ghost-captcha](https://rohitkhatri1st.github.io/ghost-captcha/)**
+— type text, pick options, get a GIF. Runs entirely in your browser, no
+install needed.
 
-To host it on GitHub Pages: Settings → Pages → Source: "GitHub Actions".
-[.github/workflows/pages.yml](.github/workflows/pages.yml) then builds
-`docs/main.wasm` and deploys `docs/` on every push to `main` — the compiled
-binary is never committed, so `go get`-ing this package never downloads it.
-To build and try it locally instead:
+### How the live demo works (for contributors)
+
+[wasm/main.go](wasm/main.go) compiles this library to WebAssembly, and
+[docs/index.html](docs/index.html) is the static page that calls it (only
+GIF works in-browser; WebM/MP4 need real ffmpeg, which WASM can't run).
+[.github/workflows/pages.yml](.github/workflows/pages.yml) builds
+`docs/main.wasm` and deploys `docs/` to GitHub Pages on every push to
+`main` — the compiled binary is never committed, so `go get`-ing this
+package never downloads it. To build and try it locally instead:
 
 ```sh
 GOOS=js GOARCH=wasm go build -o docs/main.wasm ./wasm
