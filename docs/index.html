@@ -305,20 +305,28 @@
     challengeSubmitBtn.disabled = true;
 
     // Same reasoning as generate(): let "Generating…" repaint before the
-    // blocking WASM call runs.
+    // blocking WASM call runs. Wrapped in try/catch so a thrown error
+    // (e.g. window.generateGhostCaptcha not existing, if this page ever
+    // loads a main.wasm built before that export existed) surfaces as a
+    // visible error instead of leaving "Generating…" stuck forever with
+    // nothing left to run.
     setTimeout(() => {
-      const result = window.generateGhostCaptcha();
-      if (!result.ok) {
-        setChallengeStatus("Error: " + result.error, true);
-        return;
+      try {
+        const result = window.generateGhostCaptcha();
+        if (!result.ok) {
+          setChallengeStatus("Error: " + result.error, true);
+          return;
+        }
+        challengeOutputEl.innerHTML = "";
+        const img = document.createElement("img");
+        img.src = result.dataURL;
+        img.alt = "ghost-captcha challenge";
+        challengeOutputEl.appendChild(img);
+        challengeSubmitBtn.disabled = false;
+        challengeGuessEl.focus();
+      } catch (err) {
+        setChallengeStatus("Error: " + err, true);
       }
-      challengeOutputEl.innerHTML = "";
-      const img = document.createElement("img");
-      img.src = result.dataURL;
-      img.alt = "ghost-captcha challenge";
-      challengeOutputEl.appendChild(img);
-      challengeSubmitBtn.disabled = false;
-      challengeGuessEl.focus();
     }, 20);
   }
 
@@ -329,21 +337,26 @@
     const guess = challengeGuessEl.value.trim();
     if (!guess) return;
 
-    const result = window.checkGhostCaptcha(guess);
-    if (!result.ok) {
+    try {
+      const result = window.checkGhostCaptcha(guess);
+      if (!result.ok) {
+        challengeFeedbackEl.className = "status error";
+        challengeFeedbackEl.textContent = "Error: " + result.error;
+        return;
+      }
+
+      challengeAttempts++;
+      if (result.correct) challengeCorrect++;
+      challengeScoreEl.textContent = `Score: ${challengeCorrect} correct / ${challengeAttempts} tries`;
+
+      challengeFeedbackEl.className = "status" + (result.correct ? "" : " error");
+      challengeFeedbackEl.textContent = result.correct
+        ? "✅ Correct! Click \"New challenge\" for another."
+        : "❌ Not quite — take another look and try again.";
+    } catch (err) {
       challengeFeedbackEl.className = "status error";
-      challengeFeedbackEl.textContent = "Error: " + result.error;
-      return;
+      challengeFeedbackEl.textContent = "Error: " + err;
     }
-
-    challengeAttempts++;
-    if (result.correct) challengeCorrect++;
-    challengeScoreEl.textContent = `Score: ${challengeCorrect} correct / ${challengeAttempts} tries`;
-
-    challengeFeedbackEl.className = "status" + (result.correct ? "" : " error");
-    challengeFeedbackEl.textContent = result.correct
-      ? "✅ Correct! Click \"New challenge\" for another."
-      : "❌ Not quite — take another look and try again.";
   }
 
   function numberOrZero(id) {
@@ -398,25 +411,32 @@
 
     // Let the DOM repaint the "Generating…" status before the (blocking,
     // single-threaded) WASM call runs, so the button doesn't look frozen.
+    // try/catch so a thrown error surfaces here instead of leaving
+    // "Generating…" stuck forever with nothing left to run.
     setTimeout(() => {
-      const result = window.generateGhostGIF(text, collectOptions());
-      generateBtn.disabled = false;
-      if (!result.ok) {
-        setStatus("Error: " + result.error, true);
-        return;
-      }
-      outputEl.innerHTML = "";
-      const img = document.createElement("img");
-      img.src = result.dataURL;
-      img.alt = "generated ghost-captcha";
-      outputEl.appendChild(img);
+      try {
+        const result = window.generateGhostGIF(text, collectOptions());
+        if (!result.ok) {
+          setStatus("Error: " + result.error, true);
+          return;
+        }
+        outputEl.innerHTML = "";
+        const img = document.createElement("img");
+        img.src = result.dataURL;
+        img.alt = "generated ghost-captcha";
+        outputEl.appendChild(img);
 
-      const link = document.createElement("a");
-      link.className = "download";
-      link.href = result.dataURL;
-      link.download = "ghost-captcha.gif";
-      link.textContent = "Download GIF";
-      outputEl.appendChild(link);
+        const link = document.createElement("a");
+        link.className = "download";
+        link.href = result.dataURL;
+        link.download = "ghost-captcha.gif";
+        link.textContent = "Download GIF";
+        outputEl.appendChild(link);
+      } catch (err) {
+        setStatus("Error: " + err, true);
+      } finally {
+        generateBtn.disabled = false;
+      }
     }, 20);
   }
 
