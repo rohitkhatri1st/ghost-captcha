@@ -22,6 +22,7 @@ profile.cov
 
 # Generated output from running examples/
 output_captcha.*
+output_ghost.*
 
 # Compiled by .github/workflows/pages.yml at deploy time - never committed,
 # so module downloads of this package never carry a multi-MB binary.

@@ -90,6 +90,16 @@ func encodeVideo(frames []*image.Paletted, width, height int, fps string, format
 		"-r", fps,
 		"-i", "-",
 		"-an",
+		// Both codecs below encode 4:2:0 chroma-subsampled output, which
+		// requires even width and height; the auto-fit canvas size in
+		// GhostOptions.setCanvasDefaults has no such guarantee. Rounding
+		// down to the nearest even number here (rather than constraining
+		// every caller of Width/Height) keeps both containers safe to
+		// re-encode downstream too — e.g. a WebM at an odd size encodes
+		// fine under libvpx, but a viewer transcoding that WebM to H.264
+		// for preview would hit the same "not divisible by 2" failure
+		// MP4 output hits directly.
+		"-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
 	}
 	switch format {
 	case FormatMP4:
