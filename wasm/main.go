@@ -18,13 +18,24 @@ import (
 	"encoding/base64"
 	"image/color"
 	"strconv"
+	"strings"
 	"syscall/js"
 
 	ghostcaptcha "github.com/rohitkhatri1st/ghost-captcha"
 )
 
+// currentCaptchaAnswer is the text generateGhostCaptcha most recently
+// generated. It's kept here, not returned to JS, so the page's "read it
+// yourself" challenge can't be solved by just reading the JS return value
+// instead of the animation - checkGhostCaptcha is the only way to learn
+// whether a guess matched. JS callbacks all run on the same goroutine in
+// response to sequential user actions, so this needs no locking.
+var currentCaptchaAnswer string
+
 func main() {
 	js.Global().Set("generateGhostGIF", js.FuncOf(generateGhostGIF))
+	js.Global().Set("generateGhostCaptcha", js.FuncOf(generateGhostCaptcha))
+	js.Global().Set("checkGhostCaptcha", js.FuncOf(checkGhostCaptcha))
 	select {}
 }
 
@@ -66,6 +77,41 @@ func generateGhostGIF(this js.Value, args []js.Value) any {
 		return result(false, "", err.Error())
 	}
 	return result(true, "data:image/gif;base64,"+base64.StdEncoding.EncodeToString(data), "")
+}
+
+// generateGhostCaptcha is exposed to JS as generateGhostCaptcha(). It draws
+// a fresh random captcha using the library's own captcha-appropriate
+// defaults (see CaptchaOptions), returns only the rendered GIF, and keeps
+// the answer text on the Go side for checkGhostCaptcha to check against
+// later - unlike generateGhostGIF, the text is never handed to JS at all.
+func generateGhostCaptcha(this js.Value, args []js.Value) any {
+	text, data, err := ghostcaptcha.GenerateCaptcha(ghostcaptcha.CaptchaOptions{
+		Ghost: ghostcaptcha.GhostOptions{
+			FontSize:      100,
+			LetterSpacing: 7,
+		},
+	})
+	if err != nil {
+		return result(false, "", err.Error())
+	}
+	currentCaptchaAnswer = text
+	return result(true, "data:image/gif;base64,"+base64.StdEncoding.EncodeToString(data), "")
+}
+
+// checkGhostCaptcha is exposed to JS as checkGhostCaptcha(guess). It
+// compares guess (case-insensitive, trimmed) against whatever
+// generateGhostCaptcha last generated, without ever revealing that answer
+// back to JS - only whether the guess matched.
+func checkGhostCaptcha(this js.Value, args []js.Value) any {
+	if currentCaptchaAnswer == "" {
+		return js.ValueOf(map[string]any{"ok": false, "error": "no captcha generated yet"})
+	}
+	guess := ""
+	if len(args) > 0 && args[0].Type() == js.TypeString {
+		guess = args[0].String()
+	}
+	correct := strings.EqualFold(strings.TrimSpace(guess), currentCaptchaAnswer)
+	return js.ValueOf(map[string]any{"ok": true, "correct": correct})
 }
 
 func result(ok bool, dataURL, errMsg string) js.Value {
