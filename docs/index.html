@@ -51,8 +51,8 @@
   }
   legend { padding: 0 0.4rem; font-weight: 600; }
   label { display: block; font-size: 0.85rem; margin: 0.6rem 0 0.2rem; }
-  label.row-of-two { display: inline-block; width: 48%; }
-  label.row-of-two + label.row-of-two { margin-left: 4%; }
+  .field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1rem; }
+  .field-pair label { margin-top: 0.6rem; }
   input[type="text"], input[type="number"], select, textarea {
     width: 100%;
     padding: 0.4rem 0.5rem;
@@ -132,25 +132,49 @@
       <label for="letterSpacing">Letter spacing</label>
       <input type="number" id="letterSpacing" value="7">
 
-      <label class="row-of-two" for="width">Width (blank = auto)</label>
-      <label class="row-of-two" for="height">Height (blank = auto)</label>
-      <input class="row-of-two" type="number" id="width" placeholder="auto">
-      <input class="row-of-two" type="number" id="height" placeholder="auto">
+      <div class="field-pair">
+        <div>
+          <label for="width">Width (blank = auto)</label>
+          <input type="number" id="width" placeholder="auto">
+        </div>
+        <div>
+          <label for="height">Height (blank = auto)</label>
+          <input type="number" id="height" placeholder="auto">
+        </div>
+      </div>
 
-      <label class="row-of-two" for="noiseColorA">Noise color A</label>
-      <label class="row-of-two" for="noiseColorB">Noise color B</label>
-      <input class="row-of-two" type="color" id="noiseColorA" value="#000000">
-      <input class="row-of-two" type="color" id="noiseColorB" value="#ffffff">
+      <div class="field-pair">
+        <div>
+          <label for="noiseColorA">Noise color A</label>
+          <input type="color" id="noiseColorA" value="#000000">
+        </div>
+        <div>
+          <label for="noiseColorB">Noise color B</label>
+          <input type="color" id="noiseColorB" value="#ffffff">
+        </div>
+      </div>
 
-      <label class="row-of-two" for="backgroundCellSize">Background cell size</label>
-      <label class="row-of-two" for="textCellSize">Text cell size</label>
-      <input class="row-of-two" type="number" id="backgroundCellSize" value="1" min="1">
-      <input class="row-of-two" type="number" id="textCellSize" value="1" min="1">
+      <div class="field-pair">
+        <div>
+          <label for="backgroundCellSize">Background cell size</label>
+          <input type="number" id="backgroundCellSize" value="1" min="1">
+        </div>
+        <div>
+          <label for="textCellSize">Text cell size</label>
+          <input type="number" id="textCellSize" value="1" min="1">
+        </div>
+      </div>
 
-      <label class="row-of-two" for="frameDelay">Frame delay (centiseconds)</label>
-      <label class="row-of-two" for="loop">Loop count (0 = forever)</label>
-      <input class="row-of-two" type="number" id="frameDelay" value="4" min="1">
-      <input class="row-of-two" type="number" id="loop" value="0" min="0">
+      <div class="field-pair">
+        <div>
+          <label for="frameDelay">Frame delay (centiseconds)</label>
+          <input type="number" id="frameDelay" value="4" min="1">
+        </div>
+        <div>
+          <label for="loop">Loop count (0 = forever)</label>
+          <input type="number" id="loop" value="0" min="0">
+        </div>
+      </div>
 
       <label for="frames">Frames (blank = auto; caps animation length)</label>
       <input type="number" id="frames" placeholder="auto" min="1">
